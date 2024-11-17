@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webhook</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.1/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 0;
+            background-color: #f4f4f9;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+
+        .search-container {
+            margin: 10px 0;
+            text-align: center;
+        }
+
+        .search-container input {
+            padding: 10px;
+            width: 80%;
+            max-width: 600px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        thead th {
+            background-color: #007bff;
+            color: #fff;
+            padding: 10px;
+            text-align: left;
+            cursor: pointer;
+            position: relative;
+        }
+
+        thead th.sort-asc:after,
+        thead th.sort-desc:after {
+            content: '';
+            position: absolute;
+            right: 10px;
+            border: 5px solid transparent;
+        }
+
+        thead th.sort-asc:after {
+            border-bottom: 5px solid #fff;
+        }
+
+        thead th.sort-desc:after {
+            border-top: 5px solid #fff;
+        }
+
+        tbody td {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        tbody tr:hover {
+            background-color: #e9ecef;
+        }
+
+        #response {
+            margin-top: 20px;
+            padding: 10px;
+            background: #ffffff;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            overflow-y: auto;
+            max-height: 500px;
+            white-space: pre-wrap; /* Wrap long lines */
+            word-break: break-word; /* Break long words */
+        }
+        pre {
+            background: #eee;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+         thead th {
+        background-color: #007bff;
+        color: #fff;
+        padding: 10px;
+        text-align: left;
+        cursor: pointer;
+        position: relative;
+    }
+
+    thead th .resizer {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 5px;
+        height: 100%;
+        cursor: col-resize;
+        user-select: none;
+        z-index: 1;
+    }
+
+    thead th .resizer:hover {
+        background-color: #aaa;
+    }
+    .action-subscribe {
+    color: green;
+    font-weight: bold;
+}
+
+.action-unsubscribe {
+    color: red;
+    font-weight: bold;
+}
+
+.action-change-plan {
+    color: goldenrod;
+    font-weight: bold;
+}
+
+.action-default {
+    color: blue;
+    font-weight: bold;
+}
+    </style>
+    <script type="text/javascript">
+        let stompClient = null;
+
+        // Hàm convert ISO 8601 sang local timezone
+        function convertToLocalTime(isoString) {
+            const date = new Date(isoString);
+            return date.toLocaleString(undefined, {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit"
+            });
+        }
+
+        function connect() {
+            const socket = new SockJS('/gs-guide-websocket');
+            stompClient = Stomp.over(socket);
+            stompClient.connect({}, function (frame) {
+                console.log('Connected: ' + frame);
+                stompClient.subscribe('/topic/webhook', function (greeting) {
+                    showGreeting(greeting.body);
+                });
+            });
+        }
+        
+        const requestOptions = {
+      		  method: "GET",
+      		  redirect: "follow"
+      		};
+
+      	fetch("/old-data", requestOptions)
+      	.then((response) => response.text())
+      	.then((result) => {
+      		let datas = JSON.parse(result);
+      		datas.forEach(item =>{
+      			showGreeting(JSON.stringify(item));
+      		})
+      		  })
+      	.catch((error) => console.error(error));
+
+        function showGreeting(message) {
+            const bodyEvent = document.getElementById('body-event');
+
+            try {
+                const jsonData = JSON.parse(message);
+                const contentEvent = JSON.parse(jsonData.contentEvent);
+                const trElement = document.createElement('tr');
+
+                const timeCol = document.createElement('td');
+                const nameCol = document.createElement('td');
+                const actionCol = document.createElement('td');
+                const contentCol = document.createElement('td');
+                const preElement = document.createElement('pre');
+
+                // Convert thời gian sang local timezone
+                timeCol.textContent = jsonData.eventTime;
+                timeCol.dataset.timestamp = new Date(jsonData.eventTime).getTime(); // Dùng timestamp cho việc sort
+
+                nameCol.textContent = contentEvent.Subscription.Name || "N/A";
+
+                // Xử lý Action với màu sắc
+                const actionValue = contentEvent.Action || "N/A";
+                actionCol.textContent = actionValue;
+
+                if (actionValue === "Subscribe") {
+                    actionCol.classList.add("action-subscribe");
+                } else if (actionValue === "Unsubscribe") {
+                    actionCol.classList.add("action-unsubscribe");
+                } else if (actionValue === "Change plan") {
+                    actionCol.classList.add("action-change-plan");
+                } else {
+                    actionCol.classList.add("action-default");
+                }
+
+                preElement.textContent = JSON.stringify(contentEvent, null, 2); // Hiển thị JSON đẹp hơn
+                contentCol.appendChild(preElement);
+
+                trElement.appendChild(timeCol);
+                trElement.appendChild(nameCol);
+                trElement.appendChild(actionCol);
+                trElement.appendChild(contentCol);
+                bodyEvent.insertBefore(trElement, bodyEvent.firstChild);
+            } catch (e) {
+                console.error('Invalid JSON:', message);
+            }
+        }
+
+
+
+        function sortTable(columnIndex, type) {
+            const table = document.querySelector("table");
+            const tbody = table.querySelector("tbody");
+            const rows = Array.from(tbody.rows);
+
+            const isAscending = table.dataset.sortOrder !== "asc";
+            table.dataset.sortOrder = isAscending ? "asc" : "desc";
+
+            rows.sort((rowA, rowB) => {
+                let cellA = rowA.cells[columnIndex];
+                let cellB = rowB.cells[columnIndex];
+
+                let valueA = cellA.dataset.timestamp || cellA.textContent.trim();
+                let valueB = cellB.dataset.timestamp || cellB.textContent.trim();
+
+                if (type === "number") {
+                    valueA = parseFloat(valueA) || 0;
+                    valueB = parseFloat(valueB) || 0;
+                } else if (type === "date") {
+                    valueA = parseInt(valueA, 10); // Timestamp
+                    valueB = parseInt(valueB, 10); // Timestamp
+                }
+
+                if (valueA < valueB) return isAscending ? -1 : 1;
+                if (valueA > valueB) return isAscending ? 1 : -1;
+                return 0;
+            });
+
+            tbody.append(...rows);
+            updateSortIcons(columnIndex, isAscending);
+        }
+
+        function updateSortIcons(columnIndex, isAscending) {
+            const headers = document.querySelectorAll("thead th");
+            headers.forEach((header, index) => {
+                header.classList.remove("sort-asc", "sort-desc");
+                if (index === columnIndex) {
+                    header.classList.add(isAscending ? "sort-asc" : "sort-desc");
+                }
+            });
+        }
+
+        function filterTable() {
+            const filterValue = document.getElementById('search-box').value.toLowerCase();
+            const rows = document.querySelectorAll('tbody tr');
+
+            rows.forEach(row => {
+                const cells = Array.from(row.cells);
+                const matches = cells.some(cell => cell.textContent.toLowerCase().includes(filterValue));
+                row.style.display = matches ? '' : 'none';
+            });
+        }
+        
+        function makeColumnsResizable() {
+            const tableHeaders = document.querySelectorAll("thead th");
+
+            tableHeaders.forEach((header) => {
+                const resizer = document.createElement("div");
+                resizer.classList.add("resizer");
+                header.appendChild(resizer);
+
+                let startX, startWidth;
+
+                resizer.addEventListener("mousedown", (e) => {
+                    startX = e.clientX;
+                    startWidth = header.offsetWidth;
+
+                    document.addEventListener("mousemove", resizeColumn);
+                    document.addEventListener("mouseup", stopResizing);
+                });
+
+                function resizeColumn(e) {
+                    const newWidth = startWidth + (e.clientX - startX);
+                    header.style.width = `${newWidth}px`;
+                    const columnIndex = Array.from(tableHeaders).indexOf(header);
+                    const table = header.closest("table");
+                    const rows = table.querySelectorAll("tbody tr");
+                    rows.forEach((row) => {
+                        row.cells[columnIndex].style.width = `${newWidth}px`;
+                    });
+                }
+
+                function stopResizing() {
+                    document.removeEventListener("mousemove", resizeColumn);
+                    document.removeEventListener("mouseup", stopResizing);
+                }
+            });
+        }
+
+        window.onload = function () {
+            connect();
+            makeColumnsResizable();
+            const headers = document.querySelectorAll("thead th");
+            headers.forEach((header, index) => {
+                header.addEventListener("click", () => {
+                    const type = header.dataset.type || "string";
+                    sortTable(index, type);
+                });
+            });
+
+            document.getElementById('search-box').addEventListener('input', filterTable);
+        };
+    </script>
+</head>
+
+<body>
+    <h1>Event Notify</h1>
+    <div class="search-container">
+        <input type="text" id="search-box" placeholder="Search in table...">
+    </div>
+    <div>
+        <table>
+            <thead>
+                <tr>
+                    <th data-type="date">Time</th>
+                    <th data-type="string">Subscription Name</th>
+                    <th data-type="string">Action</th>
+                    <th data-type="string" >Content Event</th>
+                </tr>
+            </thead>
+            <tbody id="body-event"></tbody>
+        </table>
+    </div>
+</body>
+
+</html>
